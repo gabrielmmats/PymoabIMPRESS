@@ -1,1 +1,6 @@
-../../../pymoab/pymoab/core.pxd
+""" Core Cython Header """
+
+from pymoab cimport moab
+
+cdef class Core:
+    cdef moab.Core* inst
