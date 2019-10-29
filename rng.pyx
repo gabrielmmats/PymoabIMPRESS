@@ -187,6 +187,7 @@ cdef class Range(object):
         cdef int i
         cdef moab.EntityHandle rtn
         cdef np.ndarray[np.int64_t, ndim = 1] keyArray
+        cdef np.ndarray[np.uint8_t, cast = True, ndim = 1] keyBoolArray
         if isinstance(key, int) or isinstance(key, np.int64):
             return self.get_int_key(key)
         elif isinstance(key, np.uint64):
@@ -202,11 +203,17 @@ cdef class Range(object):
                rtnrng.insert(self.get_int_key(keyitem))
              return rtnrng
         elif isinstance(key, np.ndarray):
-            if key.dtype is not  np.dtype('int64'):
+            if key.dtype is np.dtype('bool'):
+              keyBoolArray = key
+              for i in range(keyBoolArray.size):
+                if keyBoolArray[i]:
+                  rtnrng.insert(deref(self.inst)[i])
+              return rtnrng
+            elif key.dtype is not  np.dtype('int64'):
               raise ValueError("Invalid numpy array: (dtype: {}) provided.".format(key.dtype))
             keyArray = key
             for i in range(keyArray.size):
-              rtnrng.insert(self.get_int_key(keyArray[i]))
+              rtnrng.insert(deref(self.inst)[keyArray[i]])
             return rtnrng
         elif isinstance(key, Range):
             return key
@@ -215,32 +222,37 @@ cdef class Range(object):
 
     def get_array(self, key = None):
       """
-      Index operator.
+      Fast conversion to numpy arrays
       """
-      cdef vector[eh.EntityHandle] rtnvec
-      cdef rtnrng = Range()
-      cdef int i
-      cdef moab.EntityHandle rtn
+      cdef int i=0
+      cdef int j=0
+      cdef np.ndarray[np.uint64_t, ndim = 1] retArray
       cdef np.ndarray[np.int64_t, ndim = 1] keyArray
+      cdef np.ndarray[np.uint8_t, cast = True, ndim = 1] keyBoolArray
       if key is None:
-          return np.asarray(self)
-      if isinstance(key, int):
-          return np.array(self.get_int_key(key))
-      elif isinstance(key, slice):
-          step = key.step if key.step is not None else 1
-          start = key.start if key.start is not None else 0
-          stop = key.stop if key.stop is not None else len(self)
-          ents = list(self)[start:stop:step]
-          return np.asarray(Range(ents))
-      elif isinstance(key, list):
-          for keyitem in key:
-            rtnvec.push_back(self.get_int_key(keyitem))
-          return np.asarray(rtnvec, dtype = np.int64)
+          retArray = np.empty(self.size(), dtype = np.uint64)
+          for i in range(self.size()):
+            retArray[i] = deref(self.inst)[i]
+          return retArray
       elif isinstance(key, np.ndarray):
-        if key.dtype == np.int64:
-          return key
+          if key.dtype not in [np.dtype('int64'), np.dtype('bool')]:
+            raise ValueError("Invalid numpy array: (dtype: {}) provided.".format(key.dtype))
+          retArray = np.empty(key.size, dtype = np.uint64)
+          if key.dtype is np.dtype('int64'):
+            keyArray = key
+            for i in range(keyArray.size):
+              retArray[i] = deref(self.inst)[keyArray[i]]
+            return retArray
+          keyBoolArray = key
+          for i in range(keyBoolArray.size):
+            if keyBoolArray[i]:
+              retArray[j] = deref(self.inst)[i]
+              j = j+1
+          return retArray[:j]
+
       else:
-          raise ValueError("Invalid key (type: {}) provided.".format(type(key)))
+          raise ValueError("Key of invalid type provided.")
+
 
     def __richcmp__(self, other, op):
         cdef Range r
