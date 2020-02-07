@@ -1092,7 +1092,7 @@ cdef class Core(object):
         check_error(err, exceptions)
         return adj
 
-    def get_ord_adjacencies(self, from_ent, int to_dim, Tag tag_handle, bint create_if_missing = False, int op_type = types.INTERSECT, exceptions = ()):
+    def get_ord_adjacencies(self, from_ent, int to_dim, Tag tag_handle = None, bint create_if_missing = False, int op_type = types.INTERSECT, exceptions = ()):
 
         cdef moab.ErrorCode err
         cdef moab.EntityHandle ms_handle
@@ -1107,9 +1107,11 @@ cdef class Core(object):
         cdef bint jagged = 0
         cdef int default_size = 0
         cdef int npinput = 0
+        cdef bint tag_opt = False
         cdef np.ndarray[dtype = np.uint64_t, ndim = 1] inputArray
         cdef vector[eh.EntityHandle] rangeList
         cdef np.ndarray[np.int32_t] tag_array
+        cdef np.ndarray[np.uint64_t] handle_array
         if isinstance(from_ent, Range):
             r = from_ent
         elif isinstance(from_ent, np.ndarray):
@@ -1121,6 +1123,8 @@ cdef class Core(object):
         if not npinput:
           siz = r.size()
         cdef np.ndarray[np.int32_t, ndim = 1] idx_array = np.empty(siz, dtype = np.int32)
+        if tag_handle is not None:
+          tag_opt = True
         for i in range(siz):
           if npinput:
             inR.insert(inputArray[i])
@@ -1130,9 +1134,14 @@ cdef class Core(object):
           inR.pop_front()
           check_error(err, exceptions)
           sizj = adjs.size()
-          tag_array = self.tag_get_data(tag_handle, adjs, flat=True)
-          for j in range(sizj):
-            rangeList.push_back(tag_array[j])
+          if tag_opt:
+            tag_array = self.tag_get_data(tag_handle, adjs, flat=True).astype(np.int64)
+            for j in range(sizj):
+              rangeList.push_back(tag_array[j])
+          else:
+            handle_array = adjs.get_array()
+            for j in range(sizj):
+              rangeList.push_back(handle_array[j])
           if not jagged:
             if default_size==0:
               default_size = sizj
@@ -1143,11 +1152,11 @@ cdef class Core(object):
           adjs.clear()
         if siz==1:
           if jagged:
-            return np.delete(np.array(np.split(np.array(rangeList, dtype = np.int64), idx_array)), -1)[0]
-          return np.array(rangeList, dtype = np.int64).reshape((-1, default_size))[0]
+            return np.delete(np.array(np.split(np.array(rangeList), idx_array)), -1)[0]
+          return np.array(rangeList).reshape((-1, default_size))[0]
         if jagged:
-          return np.delete(np.array(np.split(np.array(rangeList, dtype = np.int64), idx_array)), -1)
-        return np.array(rangeList, dtype = np.int64).reshape((-1, default_size))
+          return np.delete(np.array(np.split(np.array(rangeList), idx_array)), -1)
+        return np.array(rangeList).reshape((-1, default_size))
 
 
     def type_from_handle(self, entity_handle):
@@ -1981,6 +1990,55 @@ cdef class Core(object):
             t.inst = tag
             tag_list.append(t)
         return tag_list
+
+
+#para cada volume fino i:
+#    para cada volume adjacente k de i:
+#         para cada volume da malha coarse j:
+
+
+    def check_intersection(self, vol_ind, all_v_adj):
+        cdef bint other_owner = False
+        cdef int i, j, k, l, vol, neighbour
+        cdef np.ndarray [np.uint8_t, cast = True, ndim = 2] volumes_indicator = vol_ind
+        cdef np.ndarray [np.uint8_t, ndim = 2] scores
+        cdef np.ndarray [np.int32_t, ndim = 1] owners = np.zeros(volumes_indicator.shape[0], np.int32) - 1
+        cdef int sum = volumes_indicator.shape[0]+1
+        cdef int new_sum = sum+1
+        cdef np.ndarray [np.uint8_t, ndim = 1] internal_vol_bin = np.zeros(volumes_indicator.shape[0], dtype = np.uint8)
+        cdef np.ndarray [np.int64_t, ndim = 1] internal_vol
+        cdef np.ndarray [np.int64_t, ndim = 1] all_vol_adj = np.concatenate(all_v_adj)
+        cdef np.ndarray [np.int32_t, ndim = 1] all_vol_adj_index = np.array([all_v_adj[i].size for i in range(all_v_adj.shape[0])], dtype = np.int32)
+        all_vol_adj_index = np.cumsum(np.concatenate((np.array([0], dtype = np.int32), all_vol_adj_index)), dtype = np.int32)
+        for i in range(internal_vol_bin.size):    #descobre quais volumes so tem um dono
+          if volumes_indicator[i].sum() == 1:
+            internal_vol_bin[i] = 1
+            owners[i] = volumes_indicator[i].nonzero()[0][0]
+        while sum > volumes_indicator.shape[0]:   #enquanto existirem volumes com mais de 1 dono
+          scores = np.zeros((volumes_indicator.shape[0], volumes_indicator.shape[1]), dtype = np.uint8)
+          internal_vol = internal_vol_bin.nonzero()[0]
+          for vol in internal_vol:                #para cada volume com só 1 dono, observa os volumes vizinhos com mais de 1 dono
+            for k in range(all_vol_adj_index[vol], all_vol_adj_index[vol+1]):
+              neighbour = all_vol_adj[k]
+              if internal_vol_bin[neighbour] == 0:
+                if other_owner:
+                  scores[neighbour][owners[vol]] = scores[neighbour][owners[vol]] + 1
+                elif volumes_indicator[neighbour][owners[vol]]:
+                  scores[neighbour][owners[vol]] = scores[neighbour][owners[vol]] + 1
+          for i in range(internal_vol_bin.size):
+            if internal_vol_bin[i] == 0:
+              if scores[i].sum()>0:
+                owners[i] = np.argmax(scores[i])
+                internal_vol_bin[i] = 1
+                volumes_indicator[i] = False
+                volumes_indicator[i][owners[i]] = True
+          sum = volumes_indicator.sum()
+          if new_sum == sum:
+            other_owner = True
+          else:
+            new_sum = sum
+          print('sum :', sum)
+        return volumes_indicator
 
     def point_in_volumes(self, vol_p_c, face_idx, p_coords, float tol = 0):
         cdef int i=0
