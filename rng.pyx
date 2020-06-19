@@ -6,6 +6,8 @@ from .types import _eh_array, _eh_py_type
 from libcpp.vector cimport vector
 cimport numpy as np
 import numpy as np
+import sys
+import time
 
 cdef void *null = NULL
 
@@ -36,8 +38,11 @@ def unite(Range r1, Range r2):
     r.inst.merge(i)
     return r
 
-cdef class Range(object):
 
+
+cdef class Range(object):
+    ranges_in_memory=[]
+    count_memory=[0]
     def __cinit__(self, arg = None):
         """
         Constructor.
@@ -46,7 +51,15 @@ cdef class Range(object):
 
         If no argument is provided, an empty Range will be created and returned.
         """
+        cdef int cnt_mem = Range.count_memory[0]
+        cnt_mem = (cnt_mem+1)%30
+        if cnt_mem == 10:
+          self.__checkmemory__()
         self.inst = new moab.Range()
+        Range.ranges_in_memory.append(self)
+        Range.count_memory[0]= cnt_mem
+
+
         if arg is None:
             return
         if isinstance(arg, _eh_py_type):
@@ -62,6 +75,24 @@ cdef class Range(object):
                 self.inst.insert(eh)
         else:
             raise ValueError("Not a valid argument to Range constructor.")
+
+    def __checkmemory__(self):
+        cdef int i = len(Range.ranges_in_memory)-1
+        cdef int j = 0
+        if i<20:
+          return
+        while i>=0:
+          j = j+1
+          if j>=20:
+            if(sys.getrefcount(Range.ranges_in_memory[i]) <= 2):
+                Range.ranges_in_memory[i].__del__()
+                del(Range.ranges_in_memory[i])
+          i-=1
+    def __printmemory__(self):
+        for i in range(len(Range.ranges_in_memory)):
+          print(sys.getrefcount(Range.ranges_in_memory[i]))
+        print('-------------')
+
 
     def __getstate__(self):
         """
