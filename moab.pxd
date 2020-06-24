@@ -202,6 +202,11 @@ cdef extern from "moab/Core.hpp" namespace "moab":
         ErrorCode get_connectivity(const EntityHandle *entity_handles,
                                    const int num_handles,
                                    vector[EntityHandle] & connectivity)
+        ErrorCode get_connectivity_with_size(const EntityHandle *entity_handles,
+                                  const int num_handles,
+                                  vector[EntityHandle] & connectivity,
+                                  int *size_vector,
+                                  int *jagged)
         ErrorCode get_connectivity(const EntityHandle *entity_handles,
                                    const int num_handles,
                                    vector[EntityHandle] & connectivity,
