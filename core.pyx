@@ -1423,7 +1423,7 @@ cdef class Core(object):
 
         return np.asarray(ehs_out, dtype = np.uint64)
 
-    def get_ord_connectivity(self, entity_handles, Tag tag_handle = None, bint tag_opt = True, exceptions = ()):
+    def get_ord_connectivity(self, entity_handles, exceptions = ()):
         """
         Returns the vertex handles which make up the mesh entities passed in via
         the entity_handles argument.
@@ -1939,7 +1939,7 @@ cdef class Core(object):
 
     def get_interface_faces(self, con, par, inter, bound, bound_par, num_c, fac_vec):
 
-        cdef np.ndarray[np.int16_t, ndim = 2] faces_neigh = fac_vec
+        cdef np.ndarray[np.uint16_t, ndim = 2] faces_neigh = fac_vec
         cdef np.ndarray[np.uint16_t, ndim = 3] connectivities = con
         cdef np.ndarray[np.int32_t, ndim = 2] parts = par
         cdef np.ndarray[np.uint64_t, ndim = 1] interface_faces = inter
@@ -1973,7 +1973,7 @@ cdef class Core(object):
     def get_interface_entities(self, dim, con, inter, coarses, indx, bound, bound_parts, num_c, entity_vec):
 
         cdef int entity_dim = dim
-        cdef np.ndarray[np.int16_t, ndim = 2] entity_neigh = entity_vec
+        cdef np.ndarray[np.uint16_t, ndim = 2] entity_neigh = entity_vec
         cdef np.ndarray[np.uint16_t, ndim = 3] connectivities = con
         cdef np.ndarray[np.int32_t, ndim = 2] parts = np.array([], dtype=np.int32).reshape(-1, 2)
         cdef np.ndarray[np.uint64_t, ndim = 1] interface_ent_1 = np.array([], dtype=np.uint64)

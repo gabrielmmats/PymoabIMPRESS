@@ -254,14 +254,10 @@ cdef class Range(object):
             if key.stop == None:
               return self.__getitem__(np.arange(key.start, self.size(), key.step, dtype = np.int64))
             return self.__getitem__(np.arange(key.start, key.stop, key.step, dtype = np.int64))
-            # step = key.step if key.step is not None else 1
-            # start = key.start if key.start is not None else 0
-            # stop = key.stop if key.stop is not None else len(self)
-            # ents = list(self)[start:stop:step]
         elif isinstance(key, list):
-             for keyitem in key:
-               rtnrng.insert(self.get_int_key(keyitem))
-             return rtnrng
+            return self.__getitem__(np.array(key, dtype = np.int64))
+        elif isinstance(key, tuple):
+            return self.__getitem__(np.array(key, dtype = np.int64))
         elif isinstance(key, np.ndarray):
             if key.dtype is np.dtype('bool'):
               keyBoolArray = key
@@ -291,35 +287,12 @@ cdef class Range(object):
       """
       Fast conversion to numpy arrays
       """
-      # cdef int i=0
-      # cdef int j=0
-      # cdef np.ndarray[np.uint64_t, ndim = 1] retArray
-      # cdef np.ndarray[np.int64_t, ndim = 1] keyArray64
-      # cdef np.ndarray[np.int32_t, ndim = 1] keyArray32
-      # cdef np.ndarray[np.uint8_t, cast = True, ndim = 1] keyBoolArray
+
       if key is None:
           return self.get_array_2()
       elif isinstance(key, np.ndarray):
           return self.get_array_3(key)
-          # if key.dtype not in [np.dtype('int32'), np.dtype('int64'), np.dtype('bool')]:
-          #   raise ValueError("Invalid numpy array: (dtype: {}) provided.".format(key.dtype))
-          # retArray = np.empty(key.size, dtype = np.uint64)
-          # if key.dtype is np.dtype('int32'):
-          #   keyArray32 = key
-          #   for i in range(keyArray32.size):
-          #     retArray[i] = deref(self.inst)[keyArray32[i]]
-          #   return retArray
-          # elif key.dtype is np.dtype('int64'):
-          #   keyArray64 = key
-          #   for i in range(keyArray64.size):
-          #     retArray[i] = deref(self.inst)[keyArray64[i]]
-          #   return retArray
-          # keyBoolArray = key
-          # for i in range(keyBoolArray.size):
-          #   if keyBoolArray[i]:
-          #     retArray[j] = deref(self.inst)[i]
-          #     j = j+1
-          # return retArray[:j]
+
       elif isinstance(key, slice):
           if key.start == None and key.stop == None:
             return self.get_array()
@@ -328,6 +301,10 @@ cdef class Range(object):
           if key.stop == None:
             return self.get_array(np.arange(key.start, self.size(), key.step, dtype = np.int32))
           return self.get_array(np.arange(key.start, key.stop, key.step, dtype = np.int32))
+      elif isinstance(key, list):
+          return self.get_array(np.array(key, dtype = np.int64))
+      elif isinstance(key, tuple):
+          return self.get_array(np.array(key, dtype = np.int64))
       else:
           return self.__getitem__(key).get_array()
 
