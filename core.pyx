@@ -1937,6 +1937,37 @@ cdef class Core(object):
         return tag_list
 
 
+    def get_interface_faces2(self, connectivities, par, inter, bound, bound_par, num_c, faces_neigh):
+
+        cdef np.ndarray[np.int32_t, ndim = 2] parts = par
+        cdef np.ndarray[np.uint64_t, ndim = 1] interface_faces = inter
+        cdef np.ndarray[np.int32_t, ndim = 1] boundary_parts = bound_par
+        cdef np.ndarray[np.uint64_t, ndim = 1] boundary_faces = bound
+        cdef int i
+        cdef num_internal
+        cdef int iface_number = 1
+        cdef int num_coarse = num_c
+        for i in range(parts.shape[0]):
+          if not connectivities[parts[i][0],parts[i][1]]:
+            connectivities[parts[i][0],parts[i][1]] = 1
+            connectivities[parts[i][1],parts[i][0]] = 1
+            faces_neigh[parts[i][0],parts[i][1]] = iface_number
+            faces_neigh[parts[i][1],parts[i][0]]= iface_number
+            iface_number += 1
+        num_internal = iface_number - 1
+        for i in range(boundary_parts.size):
+            if not connectivities[boundary_parts[i],num_coarse]:
+              connectivities[boundary_parts[i],num_coarse] = 1
+              faces_neigh[boundary_parts[i],num_coarse] = iface_number
+              iface_number += 1
+        listRanges = [Range() for i in range(iface_number)]
+        for i in range(parts.shape[0]):
+          listRanges[faces_neigh[parts[i][0],parts[i][1]]].insert(interface_faces[i])
+        for i in range(boundary_parts.size):
+          listRanges[faces_neigh[boundary_parts[i],num_coarse]].insert(boundary_faces[i])
+
+        return listRanges[1:], num_internal
+
     def get_interface_faces(self, con, par, inter, bound, bound_par, num_c, fac_vec):
 
         cdef np.ndarray[np.uint16_t, ndim = 2] faces_neigh = fac_vec
@@ -1969,6 +2000,61 @@ cdef class Core(object):
           listRanges[connectivities[boundary_parts[i]][num_coarse][2]].insert(boundary_faces[i])
 
         return listRanges[1:], num_internal
+
+
+    def get_interface_entities2(self, connectivities, inter, coarses, indx, bound, bound_parts, num_c, entity_neigh):
+
+        cdef np.ndarray[np.int32_t, ndim = 2] parts = np.array([], dtype=np.int32).reshape(-1, 2)
+        cdef np.ndarray[np.uint64_t, ndim = 1] interface_ent_1 = np.array([], dtype=np.uint64)
+        cdef np.ndarray[np.uint64_t, ndim = 1] interface_ent_2 = np.array([], dtype=np.uint64)
+        cdef np.ndarray[np.int32_t, ndim = 1] parts_vec
+        coarse_jagged = np.array([])
+        if indx.size>0:
+          parts = np.concatenate(coarses[~indx]).reshape(-1,2)
+          interface_ent_1 = inter[~indx]
+          interface_ent_2 = inter[indx]
+          coarse_jagged  = coarses[indx]
+        cdef np.ndarray[np.uint64_t, ndim = 1] boundary_entities = bound
+        cdef int i,j,k
+        cdef num_internal
+        cdef int ient_number = 1
+        cdef int num_coarse = num_c
+        for i in range(parts.shape[0]):
+          if not connectivities[parts[i][0],parts[i][1]]:
+            connectivities[parts[i][0],parts[i][1]] = 1
+            connectivities[parts[i][1],parts[i][0]] = 1
+            entity_neigh[parts[i][0],parts[i][1]] = ient_number
+            entity_neigh[parts[i][1],parts[i][0]]= ient_number
+            ient_number += 1
+
+        listRanges = [Range() for i in range(ient_number)]
+        for i in range(parts.shape[0]):
+          listRanges[entity_neigh[parts[i][0],parts[i][1]]].insert(interface_ent_1[i])
+        for i in range(coarse_jagged.shape[0]):
+          parts_vec =  coarse_jagged[i].astype(np.int32)
+          for j in range(parts_vec.size):
+            for k in range(parts_vec.size):
+              if j != k:
+                if not connectivities[parts_vec[j],parts_vec[k]]:
+                    connectivities[parts_vec[k],parts_vec[j]] = 1
+                    connectivities[parts_vec[j],parts_vec[k]] = 1
+                    entity_neigh[parts_vec[k],parts_vec[j]] = ient_number
+                    entity_neigh[parts_vec[j],parts_vec[k]] = ient_number
+                    ient_number += 1
+                    listRanges.append(Range())
+                listRanges[entity_neigh[parts_vec[j],parts_vec[k]]].insert(interface_ent_2[i])
+        num_internal = ient_number - 1
+        for i in range(bound_parts.shape[0]):
+          parts_vec = bound_parts[i].astype(np.int32)
+          for j in range(parts_vec.size):
+            if not connectivities[parts_vec[j],num_coarse]:
+              connectivities[parts_vec[j],num_coarse] = 1
+              entity_neigh[parts_vec[j],num_coarse] = ient_number
+              ient_number += 1
+              listRanges.append(Range())
+            listRanges[entity_neigh[parts_vec[j],num_coarse]].insert(boundary_entities[i])
+        return listRanges[1:], num_internal
+
 
     def get_interface_entities(self, dim, con, inter, coarses, indx, bound, bound_parts, num_c, entity_vec):
 
