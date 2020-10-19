@@ -2010,7 +2010,7 @@ cdef class Core(object):
         cdef np.ndarray[np.int32_t, ndim = 1] parts_vec
         coarse_jagged = np.array([])
         if indx.size>0:
-          parts = np.concatenate(coarses[~indx]).reshape(-1,2)
+          parts = np.concatenate(coarses[~indx].reshape(-1, 1)).reshape(-1,2)
           interface_ent_1 = inter[~indx]
           interface_ent_2 = inter[indx]
           coarse_jagged  = coarses[indx]
